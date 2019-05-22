@@ -22,9 +22,9 @@ jobs:
       - checkout
       - setup_remote_docker
       - run:
-        name: Setup Environment
-        command: |
-          echo 'export VERSION_TAG=$(date -u +%y%m%d%H%M)"' >> $BASH_ENV
+          name: Setup Environment
+          command: |
+            echo 'export VERSION_TAG=$(date -u +%y%m%d%H%M)"' >> $BASH_ENV
       - run:
           name: Build Docker image
           command: |
