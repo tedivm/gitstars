@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import UJSONResponse, RedirectResponse
-from datetime import datetime
+from datetime import datetime, timedelta
 import aiosqlite
 import os
 import ujson
@@ -64,7 +64,12 @@ async def repository_info(owner: str, repository: str):
     details['status'] = 'ok'
     details['owner'] = owner
     details['repository'] = repository
-    return details
+    expires_at = datetime.utcnow() + timedelta(minutes=os.environ.get('RATELIMIT_PRESERVE', 70))
+    headers = {
+        'Cache-Control': "public, max-stale=%s" % (60*60*24*30,),
+        'Expires': expires_at.strftime('%a, %d %b %Y %H:%M:%S GMT')
+    }
+    return UJSONResponse(content=details, headers=headers)
 
 
 @app.get('/ping', response_class=UJSONResponse, response_model=BaseResultModel)
