@@ -22,19 +22,16 @@ jobs:
       - checkout
       - setup_remote_docker
       - run:
-          name: Setup Environment
-          command: |
-            echo 'export VERSION_TAG=$(date -u +%y%m%d%H%M)"' >> $BASH_ENV
-      - run:
           name: Build Docker image
           command: |
             docker build -t $IMAGE_NAME:latest . | cat
-            docker build -t $IMAGE_NAME:latest -t $IMAGE_NAME:$VERSION_TAG . | cat
       - run:
           name: Publish Docker Image to Docker Hub
           command: |
             echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
             docker push $IMAGE_NAME:latest | cat
+            VERSION_TAG=$(date -u +%y%m%d%H%M)
+            docker tag $IMAGE_NAME:latest $IMAGE_NAME:$VERSION_TAG
             docker push $IMAGE_NAME:$VERSION_TAG | cat
 
 workflows:
