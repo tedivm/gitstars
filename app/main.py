@@ -90,7 +90,7 @@ async def get_repository_info(owner, repository):
 
     # If the ratelimit is running out save API calls for new entries.
     ratelimits = await get_ratelimits()
-    requests_remaining_percent = int(ratelimits['remaining']/ratelimits['core']['limit']*100)
+    requests_remaining_percent = int(ratelimits['remaining']/ratelimits['limit']*100)
     if requests_remaining_percent < int(os.environ.get('RATELIMIT_PRESERVE', 10)):
         return saved_details
 
