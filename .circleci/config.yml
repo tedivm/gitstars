@@ -25,7 +25,7 @@ jobs:
           name: Build Docker image
           command: |
             docker build -t $IMAGE_NAME:latest . | cat
-            docker build -t $IMAGE_NAME:latest -t $IMAGE_NAME:$(date +%F) . | cat
+            docker build -t $IMAGE_NAME:latest -t $IMAGE_NAME:$(date -u +%y%m%d%H%M) . | cat
       - run:
           name: Publish Docker Image to Docker Hub
           command: |
