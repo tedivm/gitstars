@@ -1,0 +1,10 @@
+aiodns
+aiohttp
+aiosqlite
+cchardet
+email-validator
+pydantic
+ujson
+github3.py
+pyyaml
+python-multipart

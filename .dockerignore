@@ -1,0 +1,8 @@
+.git
+.gitignore
+bin
+env
+docker-compose.yaml
+makefile
+README.md
+*.pyc

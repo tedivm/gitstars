@@ -1,0 +1,15 @@
+version: "3"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: /start-reload.sh
+    environment:
+      - WEB_CONCURRENCY=2
+      #- GITHUB_TOKEN=ChangeMe
+    ports:
+      - "80:80"
+    volumes:
+      - ./app:/app
