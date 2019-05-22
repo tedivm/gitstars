@@ -8,7 +8,10 @@ import os
 import ujson
 from github3.exceptions import NotFoundError
 
-app = FastAPI()
+app = FastAPI(
+    title='Git Stars',
+    description='Extremely Fast Follow Stats for Github Repositories'
+)
 
 app.add_middleware(
     CORSMiddleware,
