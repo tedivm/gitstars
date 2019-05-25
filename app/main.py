@@ -211,7 +211,7 @@ async def get_github_info(owner, repository, background_tasks=False):
 
     github_details = await get_info_from_github(owner, repository)
     if background_tasks:
-        background_tasks.add_task(save_github_info_into_sqlite, repository, github_details)
+        background_tasks.add_task(save_github_info_into_sqlite, owner, repository, github_details)
     else:
         await save_github_info_into_sqlite(owner, repository, github_details)
     return github_details
