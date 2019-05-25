@@ -29,6 +29,64 @@ All of these documents are hosted alongside the API and get updated directly fro
 * [OpenAPI (json)](https://stars.gitconsensus.com/openapi.json): This is the OpenAPI specification for this API.
 
 
+## Quick Examples
+
+### Repositories
+
+Repositories can be accessed with the URL pattern `https://stars.gitconsensus.com/repos/{owner}/{repo}`.
+
+> https://stars.gitconsensus.com/repos/ScreepsQuorum/screeps-quorum
+
+```json
+{
+   "age":0,
+   "owner":{
+      "login":"ScreepsQuorum"
+   },
+   "topics":[
+      "screeps",
+      "gitconsensus"
+   ],
+   "name":"screeps-quorum",
+   "fork":false,
+   "description":"Screeps Self Managing and Playing Codebase",
+   "homepage":"http:\/\/quorum.tedivm.com\/",
+   "html_url":"https:\/\/github.com\/ScreepsQuorum\/screeps-quorum",
+   "language":"JavaScript",
+   "forks_count":37,
+   "open_issues_count":27,
+   "stargazers_count":74,
+   "subscribers_count":10,
+   "archived":false,
+   "status":"ok"
+}
+```
+
+### Users
+
+Users can be accessed with the URL pattern `https://stars.gitconsensus.com/users/{user}`.
+
+> https://stars.gitconsensus.com/users/tedivm
+
+```json
+{
+   "age":0,
+   "login":"tedivm",
+   "name":"Robert Hafner",
+   "bio":"Lots of personal projects as well as @gitconsensus, @tedious, @LeagueOfAutomatedNations, and @screepers.",
+   "blog":"http:\/\/www.tedivm.com",
+   "company":null,
+   "followers":159,
+   "following":106,
+   "html_url":"https:\/\/github.com\/tedivm",
+   "type":"User",
+   "public_repos":115,
+   "public_gists":19,
+   "status":"ok"
+}
+```
+
+
 ## Applications Using Gitstars
 
 ### [GitButtons](https://gitbuttons.tedivm.com/)

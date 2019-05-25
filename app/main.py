@@ -73,7 +73,6 @@ repository_keys = [
     'open_issues_count',
     'stargazers_count',
     'subscribers_count',
-    'topics',
     'archived',
 ]
 
@@ -240,16 +239,14 @@ async def get_repository_info_from_github(owner, repository):
         return False
 
     repo_details = {
-        'age': 0
+        'age': 0,
+        'owner': {'login': repo.owner.login},
+        'topics': repo.topics().names
     }
     for key in repository_keys:
         if hasattr(repo, key):
             repo_details[key] = getattr(repo, key)
 
-
-    repo_details['owner'] = {
-        'login': repo.owner.login
-    }
 
     return repo_details
 
