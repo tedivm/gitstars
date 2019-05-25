@@ -76,6 +76,9 @@ repository_keys = [
 ]
 
 
+class Storage(BaseResultModel):
+    count: int
+
 class RequestLimits(BaseModel):
     limit: int
     remaining: int
@@ -116,6 +119,14 @@ async def ratelimit():
     ratelimits = await get_ratelimits()
     ratelimits['status'] = 'ok'
     return ratelimits
+
+
+@app.get('/storage', response_class=UJSONResponse, response_model=Storage)
+async def storage():
+    return {
+        'status': 'ok',
+        'count': await get_stored_repository_count()
+    }
 
 
 async def get_repository_info(owner, repository):
@@ -202,6 +213,13 @@ async def get_saved_repository_info_from_sqlite(owner, repository):
         if details:
             details['age'] = int((int(datetime.timestamp(datetime.now())) - int(row[0]))/60)
         return details
+
+
+async def get_stored_repository_count():
+    async with aiosqlite.connect(get_sqlite_path()) as db:
+        async with db.execute('select (select count() from repositories) as count, * from repositories') as cursor:
+            row = await cursor.fetchone()
+            return row[0]
 
 
 async def create_database():
