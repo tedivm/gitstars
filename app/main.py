@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, UrlStr
 from typing import List
 from starlette.middleware.cors import CORSMiddleware
@@ -128,8 +128,8 @@ class RequestLimits(BaseModel):
         302: {"description": "Repository Moved"},
         404: {"description": "Repository Not Found"},
     })
-async def repository_info(owner: str, repository: str):
-    details = await get_github_info(owner, repository)
+async def repository_info(owner: str, repository: str, background_tasks: BackgroundTasks):
+    details = await get_github_info(owner, repository, background_tasks)
     if not details:
         raise HTTPException(status_code=404, detail="Unable to find repository")
 
@@ -151,8 +151,8 @@ async def repository_info(owner: str, repository: str):
     responses={
         404: {"description": "User Not Found"},
     })
-async def user_info(user: str):
-    details = await get_github_info(user, False)
+async def user_info(user: str, background_tasks: BackgroundTasks):
+    details = await get_github_info(user, False, background_tasks)
     if not details:
         raise HTTPException(status_code=404, detail="Unable to find user")
     details['status'] = 'ok'
@@ -178,6 +178,7 @@ async def ratelimit():
 
 @app.get('/storage', response_class=UJSONResponse, response_model=Storage)
 async def storage():
+    await create_database()
     return {
         'status': 'ok',
         'repository_count': await get_stored_repository_count(),
@@ -185,15 +186,21 @@ async def storage():
     }
 
 
-async def get_github_info(owner, repository):
+async def get_github_info(owner, repository, background_tasks=False):
     saved_details = await get_saved_github_info_from_sqlite(owner, repository)
     if not saved_details:
         github_details = await get_info_from_github(owner, repository)
         await save_github_info_into_sqlite(owner, repository, github_details)
         return github_details
 
-    if saved_details['age'] < int(os.environ.get('CACHE_TTL', 60)):
+    if saved_details['age'] < int(os.environ.get('CACHE_SOFT_TTL', 60)):
         return saved_details
+
+    # Between the SOFT_TTL and HARD_TTL apply a random change of regenerating.
+    # This distributes misses to smooth out calls to the github api.
+    if saved_details['age'] < int(os.environ.get('CACHE_HARD_TTL', 600)):
+        if random.random() < float(os.environ.get('CACHE_REGENERATE_CHANCE', 10))/100:
+            return saved_details
 
     # If the ratelimit is running out save API calls for new entries.
     ratelimits = await get_ratelimits()
@@ -202,7 +209,10 @@ async def get_github_info(owner, repository):
         return saved_details
 
     github_details = await get_info_from_github(owner, repository)
-    await save_github_info_into_sqlite(owner, repository, github_details)
+    if background_tasks:
+        background_tasks.add_task(save_github_info_into_sqlite, repository, github_details)
+    else:
+        await save_github_info_into_sqlite(owner, repository, github_details)
     return github_details
 
 
@@ -303,6 +313,8 @@ async def get_stored_repository_count():
     async with aiosqlite.connect(get_sqlite_path()) as db:
         async with db.execute('select (select count() from repositories) as count, * from repositories') as cursor:
             row = await cursor.fetchone()
+            if not row:
+                return 0
             return row[0]
 
 
@@ -310,6 +322,8 @@ async def get_stored_user_count():
     async with aiosqlite.connect(get_sqlite_path()) as db:
         async with db.execute('select (select count() from users) as count, * from users') as cursor:
             row = await cursor.fetchone()
+            if not row:
+                return 0
             return row[0]
 
 
