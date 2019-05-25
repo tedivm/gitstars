@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, UrlStr
+from typing import List
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import UJSONResponse, RedirectResponse
 from datetime import datetime, timedelta
@@ -7,6 +8,12 @@ import aiosqlite
 import os
 import ujson
 from github3.exceptions import NotFoundError
+
+
+import logging
+logger = logging.getLogger("uvicorn")
+
+
 
 app = FastAPI(
     title='Git Stars',
@@ -21,6 +28,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+repository_keys = [
+    'name',
+    'fork',
+    'description',
+    'homepage',
+    'language',
+    'forks_count',
+    'open_issues_count',
+    'stargazers_count',
+    'subscribers_count',
+    'topics',
+    'archived',
+]
+
 @app.get("/", include_in_schema=False)
 async def redirect():
     return RedirectResponse(url='/redoc')
@@ -32,17 +53,39 @@ class BaseResultModel(BaseModel):
 class ErrorResponse(BaseModel):
     details: str
 
+class RepositoryOwner(BaseModel):
+    login: str
 
-class RepositoryStatistics(BaseResultModel):
-    status: str
-    owner: str
-    repository: str
-    status: str
-    forks: int
-    issues: int
-    stargazers: int
-    watchers: int
-    age: int = None
+class RepositoryResponse(BaseResultModel):
+    name: str
+    owner: RepositoryOwner
+    description: str = None
+    homepage: UrlStr = None
+    language: str = None
+    forks_count: int
+    open_issues_count: int
+    stargazers_count: int
+    subscribers_count: int
+    topics: List[str] = []
+    archived: bool = False
+    fork: bool = False
+    age: int
+
+# Should match the scalars above.
+repository_keys = [
+    'name',
+    'fork',
+    'description',
+    'homepage',
+    'language',
+    'forks_count',
+    'open_issues_count',
+    'stargazers_count',
+    'subscribers_count',
+    'topics',
+    'archived',
+]
+
 
 class RequestLimits(BaseModel):
     limit: int
@@ -52,18 +95,20 @@ class RequestLimits(BaseModel):
 
 @app.get('/repos/{owner}/{repository}',
     response_class=UJSONResponse,
-    response_model=RepositoryStatistics,
+    response_model=RepositoryResponse,
     responses={
-        404: {'model': ErrorResponse, "description": "Repository Not Found"},
+        302: {"description": "Repository Moved"},
+        404: {"description": "Repository Not Found"},
     })
 async def repository_info(owner: str, repository: str):
     details = await get_repository_info(owner, repository)
     if not details:
         raise HTTPException(status_code=404, detail="Unable to find repository")
-        #return UJSONResponse({'status': 'error'}, status_code=404)
+
+    if owner != details['owner']['login'] or repository != details['name']:
+        return RedirectResponse(url='/repos/%s/%s' % (details['owner']['login'], details['name']))
+
     details['status'] = 'ok'
-    details['owner'] = owner
-    details['repository'] = repository
     expires_at = datetime.utcnow() + timedelta(minutes=os.environ.get('RATELIMIT_PRESERVE', 70))
     headers = {
         'Cache-Control': "public, max-stale=%s" % (60*60*24*30,),
@@ -119,6 +164,22 @@ async def get_repository_info_from_github(owner, repository):
     except NotFoundError:
         return False
 
+    if repo.private:
+        return False
+
+    repo_details = {
+        'age': 0
+    }
+    for key in repository_keys:
+        if hasattr(repo, key):
+            repo_details[key] = getattr(repo, key)
+
+
+    repo_details['owner'] = {
+        'login': repo.owner.login
+    }
+
+    '''
     repo_details = {
         'forks': repo.forks_count,
         'issues': repo.open_issues_count,
@@ -126,6 +187,7 @@ async def get_repository_info_from_github(owner, repository):
         'watchers': repo.subscribers_count,
         'age': 0
     }
+    '''
 
     return repo_details
 
