@@ -31,6 +31,7 @@ app.add_middleware(
 repository_keys = [
     'name',
     'fork',
+    'html_url',
     'description',
     'homepage',
     'language',
@@ -61,6 +62,7 @@ class RepositoryResponse(BaseResultModel):
     owner: RepositoryOwner
     description: str = None
     homepage: UrlStr = None
+    html_url: UrlStr
     language: str = None
     forks_count: int
     open_issues_count: int
