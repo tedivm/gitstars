@@ -125,7 +125,7 @@ async def ratelimit():
 async def storage():
     return {
         'status': 'ok',
-        'count': await get_stored_repository_count()
+        'repository_count': await get_stored_repository_count()
     }
 
 
