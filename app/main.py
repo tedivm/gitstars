@@ -28,20 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-repository_keys = [
-    'name',
-    'fork',
-    'html_url',
-    'description',
-    'homepage',
-    'language',
-    'forks_count',
-    'open_issues_count',
-    'stargazers_count',
-    'subscribers_count',
-    'topics',
-    'archived',
-]
 
 @app.get("/", include_in_schema=False)
 async def redirect():
@@ -79,6 +65,7 @@ repository_keys = [
     'fork',
     'description',
     'homepage',
+    'html_url',
     'language',
     'forks_count',
     'open_issues_count',
