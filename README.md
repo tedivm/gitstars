@@ -10,6 +10,7 @@ This API is geared towards front end development and provides a variety of benef
 * Smaller Responses as the service strips out data that can be easily generated,
 * Faster Responses due to caching,
 * High Resilience, as it will return cached results when issues occur,
+* CDN and Client Side Caching because of HTTP Caching Headers,
 * Easy Migration since the service mirrors the Github API endpoints and responses.
 
 There are some limitations though-
