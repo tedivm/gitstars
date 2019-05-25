@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import aiosqlite
 import os
 import ujson
+from enum import Enum
 from github3.exceptions import NotFoundError
 
 
@@ -76,8 +77,43 @@ repository_keys = [
 ]
 
 
+class TypeEnum(str, Enum):
+    organization = 'Organization'
+    user = 'User'
+
+
+class UserResponse(BaseResultModel):
+    login: str
+    type: TypeEnum
+    name: str = None
+    bio: str = None
+    blog: UrlStr = None
+    company: str = None
+    followers: int = 0
+    following: int = 0
+    html_url: UrlStr
+    public_repos: int = 0
+
+# Should match the values above
+user_keys = [
+    'login',
+    'name',
+    'bio',
+    'blog',
+    'company',
+    'followers',
+    'following',
+    'html_url',
+    'type',
+    'public_repos',
+    'public_gists',
+]
+
+
 class Storage(BaseResultModel):
-    count: int
+    repository_count: int = 0
+    user_count: int = 0
+
 
 class RequestLimits(BaseModel):
     limit: int
@@ -93,13 +129,32 @@ class RequestLimits(BaseModel):
         404: {"description": "Repository Not Found"},
     })
 async def repository_info(owner: str, repository: str):
-    details = await get_repository_info(owner, repository)
+    details = await get_github_info(owner, repository)
     if not details:
         raise HTTPException(status_code=404, detail="Unable to find repository")
 
     if owner != details['owner']['login'] or repository != details['name']:
         return RedirectResponse(url='/repos/%s/%s' % (details['owner']['login'], details['name']))
 
+    details['status'] = 'ok'
+    expires_at = datetime.utcnow() + timedelta(minutes=os.environ.get('RATELIMIT_PRESERVE', 70))
+    headers = {
+        'Cache-Control': "public, max-stale=%s" % (60*60*24*30,),
+        'Expires': expires_at.strftime('%a, %d %b %Y %H:%M:%S GMT')
+    }
+    return UJSONResponse(content=details, headers=headers)
+
+
+@app.get('/users/{user}',
+    response_class=UJSONResponse,
+    response_model=UserResponse,
+    responses={
+        404: {"description": "User Not Found"},
+    })
+async def user_info(user: str):
+    details = await get_github_info(user, False)
+    if not details:
+        raise HTTPException(status_code=404, detail="Unable to find user")
     details['status'] = 'ok'
     expires_at = datetime.utcnow() + timedelta(minutes=os.environ.get('RATELIMIT_PRESERVE', 70))
     headers = {
@@ -125,21 +180,20 @@ async def ratelimit():
 async def storage():
     return {
         'status': 'ok',
-        'repository_count': await get_stored_repository_count()
+        'repository_count': await get_stored_repository_count(),
+        'user_count': await get_stored_user_count(),
     }
 
 
-async def get_repository_info(owner, repository):
-    saved_details = await get_saved_repository_info_from_sqlite(owner, repository)
+async def get_github_info(owner, repository):
+    saved_details = await get_saved_github_info_from_sqlite(owner, repository)
     if not saved_details:
-        github_details = await get_repository_info_from_github(owner, repository)
-        await save_repository_info_into_sqlite(owner, repository, github_details)
+        github_details = await get_info_from_github(owner, repository)
+        await save_github_info_into_sqlite(owner, repository, github_details)
         return github_details
-
 
     if saved_details['age'] < int(os.environ.get('CACHE_TTL', 60)):
         return saved_details
-
 
     # If the ratelimit is running out save API calls for new entries.
     ratelimits = await get_ratelimits()
@@ -147,9 +201,16 @@ async def get_repository_info(owner, repository):
     if requests_remaining_percent < int(os.environ.get('RATELIMIT_PRESERVE', 10)):
         return saved_details
 
-    github_details = await get_repository_info_from_github(owner, repository)
-    await save_repository_info_into_sqlite(owner, repository, github_details)
+    github_details = await get_info_from_github(owner, repository)
+    await save_github_info_into_sqlite(owner, repository, github_details)
     return github_details
+
+
+async def get_info_from_github(owner, repository):
+    if repository:
+        return await get_repository_info_from_github(owner, repository)
+    else:
+        return await get_user_info_from_github(owner)
 
 
 async def get_repository_info_from_github(owner, repository):
@@ -179,32 +240,55 @@ async def get_repository_info_from_github(owner, repository):
         'login': repo.owner.login
     }
 
-    '''
-    repo_details = {
-        'forks': repo.forks_count,
-        'issues': repo.open_issues_count,
-        'stargazers': repo.stargazers_count,
-        'watchers': repo.subscribers_count,
-        'age': 0
-    }
-    '''
-
     return repo_details
 
 
-async def save_repository_info_into_sqlite(owner, repository, details):
+async def get_user_info_from_github(user):
+    ratelimits = await get_ratelimits()
+    print(ratelimit)
+    if ratelimits['remaining'] < 10:
+        return False
+
+    try:
+        gh = get_github_client()
+        user = gh.user(user)
+    except NotFoundError:
+        return False
+
+    user_details = {
+        'age': 0
+    }
+    for key in user_keys:
+        if hasattr(user, key):
+            user_details[key] = getattr(user, key)
+
+    user_details['followers'] = user.followers_count
+    user_details['following'] = user.following_count
+
+    return user_details
+
+
+async def save_github_info_into_sqlite(owner, repository, details):
     await create_database()
     async with aiosqlite.connect(get_sqlite_path()) as db:
-        insert_sql = 'REPLACE INTO repositories (owner, repository, update_time, details_json) VALUES(?, ?, ?, ?)'
-        await db.execute(insert_sql, (owner, repository, int(datetime.timestamp(datetime.now())), ujson.dumps(details)))
+        if repository:
+            insert_sql = 'REPLACE INTO repositories (owner, repository, update_time, details_json) VALUES(?, ?, ?, ?)'
+            await db.execute(insert_sql, (owner, repository, int(datetime.timestamp(datetime.now())), ujson.dumps(details)))
+        else:
+            insert_sql = 'REPLACE INTO users (user, update_time, details_json) VALUES(?, ?, ?)'
+            await db.execute(insert_sql, (owner, int(datetime.timestamp(datetime.now())), ujson.dumps(details)))
         await db.commit()
 
 
-async def get_saved_repository_info_from_sqlite(owner, repository):
+async def get_saved_github_info_from_sqlite(owner, repository):
     await create_database()
     async with aiosqlite.connect(get_sqlite_path()) as db:
-        select_sql = 'SELECT update_time, details_json FROM repositories WHERE owner = ? AND repository = ?'
-        cursor = await db.execute(select_sql, (owner, repository))
+        if repository:
+            select_sql = 'SELECT update_time, details_json FROM repositories WHERE owner = ? AND repository = ?'
+            cursor = await db.execute(select_sql, (owner, repository))
+        else:
+            select_sql = 'SELECT update_time, details_json FROM users WHERE user = ?'
+            cursor = await db.execute(select_sql, (owner,))
         row = await cursor.fetchone()
         if not row:
             return False
@@ -222,6 +306,13 @@ async def get_stored_repository_count():
             return row[0]
 
 
+async def get_stored_user_count():
+    async with aiosqlite.connect(get_sqlite_path()) as db:
+        async with db.execute('select (select count() from users) as count, * from users') as cursor:
+            row = await cursor.fetchone()
+            return row[0]
+
+
 async def create_database():
     async with aiosqlite.connect(get_sqlite_path()) as db:
         await db.execute('''CREATE TABLE IF NOT EXISTS repositories (
@@ -230,6 +321,13 @@ async def create_database():
                                  update_time int,
                                  details_json text,
                                  PRIMARY KEY (owner, repository)
+                             )
+                            ''')
+        await db.execute('''CREATE TABLE IF NOT EXISTS users (
+                                 user text,
+                                 update_time int,
+                                 details_json text,
+                                 PRIMARY KEY (user)
                              )
                             ''')
         await db.commit()
