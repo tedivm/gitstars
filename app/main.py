@@ -199,12 +199,12 @@ async def get_github_info(owner, repository, background_tasks=False):
     # Between the SOFT_TTL and HARD_TTL apply a random change of regenerating.
     # This distributes misses to smooth out calls to the github api.
     if saved_details['age'] < int(os.environ.get('CACHE_HARD_TTL', 600)):
-        if random.random() < float(os.environ.get('CACHE_REGENERATE_CHANCE', 10))/100:
+        if random.random() > float(os.environ.get('CACHE_REGENERATE_CHANCE', 10))/100:
             return saved_details
 
     # If the ratelimit is running out save API calls for new entries.
     ratelimits = await get_ratelimits()
-    requests_remaining_percent = int(ratelimits['remaining']/ratelimits['limit']*100)
+    requests_remaining_percent = int((ratelimits['remaining']/ratelimits['limit'])*100)
     if requests_remaining_percent < int(os.environ.get('RATELIMIT_PRESERVE', 10)):
         return saved_details
 
